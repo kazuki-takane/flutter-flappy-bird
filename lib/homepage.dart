@@ -13,44 +13,89 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   bool gameHasStarted = false;
-  static double birdYAxis = 0;
-  double initialHeight = birdYAxis;
+  double birdYAxis = 0;
+  double initialHeight = 0;
   double height = 0;
   double time = 0;
+  double barrierResetPos = 1.5;
+  double barrierMoveSpeed = 0.05;
   static double barrier1x = 1.5;
   double barrier2x = barrier1x + 1.5;
+  Timer? gameTimer;
 
   void jump() {
     time = 0;
     initialHeight = birdYAxis;
   }
 
-  void startGame() {
+  void resetGame() {
+    birdYAxis = 0;
+    initialHeight = 0;
+    time = 0;
+    barrier1x = barrierResetPos;
+    barrier2x = barrierResetPos + 1.5;
+  }
+
+  void startGame(BuildContext context) {
     gameHasStarted = true;
-    Timer.periodic(const Duration(milliseconds: 50), (timer) {
+    gameTimer?.cancel();
+
+    gameTimer = Timer.periodic(const Duration(milliseconds: 50), (timer) {
       time += 0.05;
       height = -4 * time * time + 2 * time;
 
       setState(() {
         birdYAxis = initialHeight - height;
 
-        if (barrier1x < -1.2) {
-          barrier1x = 1.5;
-        } else {
-          barrier1x -= 0.05;
-        }
-        if (barrier2x < -1.2) {
-          barrier2x = 1.5;
-        } else {
-          barrier2x -= 0.05;
-        }
+        barrier1x =
+            barrier1x < -1.2 ? barrierResetPos : barrier1x - barrierMoveSpeed;
+        barrier2x =
+            barrier2x < -1.2 ? barrierResetPos : barrier2x - barrierMoveSpeed;
       });
 
       if (birdYAxis > 2) {
         timer.cancel();
         gameHasStarted = false;
+        resetGame();
+        _showDialog(context);
       }
     });
+  }
+
+  void _showDialog(BuildContext context) {
+    showDialog<void>(
+      context: context,
+      builder: (BuildContext context) {
+        return Dialog(
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('SCORE',
+                    style: TextStyle(color: Colors.black, fontSize: 15)),
+                SizedBox(height: 20),
+                Text("10", style: TextStyle(color: Colors.black, fontSize: 35)),
+                SizedBox(height: 20),
+                ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(context);
+                  },
+                  child: Text('RESTART'),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    gameTimer?.cancel();
+    super.dispose();
   }
 
   @override
@@ -61,8 +106,7 @@ class _HomePageState extends State<HomePage> {
           if (gameHasStarted) {
             jump();
           } else {
-            print(birdYAxis);
-            startGame();
+            startGame(context);
           }
         },
         child: Column(children: [
