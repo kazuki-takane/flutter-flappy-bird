@@ -6,8 +6,8 @@ class Player extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 60,
-      height: 60,
+      width: 40,
+      height: 40,
       child: ClipRRect(
           borderRadius: BorderRadius.circular(100),
           child: Image.asset(
