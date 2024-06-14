@@ -22,6 +22,31 @@ class _HomePageState extends State<HomePage> {
   static double barrier1x = 1.5;
   double barrier2x = barrier1x + 1.5;
   Timer? gameTimer;
+  final GlobalKey _expandedKey = GlobalKey();
+  double expandedHeight = 0.0;
+  double barrier1UpperLength = 100;
+  double barrier1LowerLength = 150;
+  double barrier2UpperLength = 150;
+  double barrier2LowerLength = 100;
+  bool isClearBarrier1 = false;
+  bool isClearBarrier2 = false;
+  double gameScore = 0;
+  static double bestScore = 0;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    WidgetsBinding.instance.addPostFrameCallback(_getHeight);
+  }
+
+  void _getHeight(Duration timeStamp) {
+    final RenderBox renderBox =
+        _expandedKey.currentContext?.findRenderObject() as RenderBox;
+    setState(() {
+      expandedHeight = renderBox.size.height;
+    });
+    print("Expanded height: $expandedHeight");
+  }
 
   void jump() {
     time = 0;
@@ -34,6 +59,8 @@ class _HomePageState extends State<HomePage> {
     time = 0;
     barrier1x = barrierResetPos;
     barrier2x = barrierResetPos + 1.5;
+    isClearBarrier1 = false;
+    isClearBarrier2 = false;
   }
 
   void startGame(BuildContext context) {
@@ -47,12 +74,60 @@ class _HomePageState extends State<HomePage> {
       setState(() {
         birdYAxis = initialHeight - height;
 
-        barrier1x =
-            barrier1x < -1.2 ? barrierResetPos : barrier1x - barrierMoveSpeed;
-        barrier2x =
-            barrier2x < -1.2 ? barrierResetPos : barrier2x - barrierMoveSpeed;
+        // バリアを超えたらスコア追加
+        print("barrier1x$barrier1x");
+        if (barrier1x < -0.05 && !isClearBarrier1) {
+          print("barrier1超えた");
+          isClearBarrier1 = true;
+          gameScore += 10;
+
+          if (bestScore < gameScore) {
+            bestScore = gameScore;
+          }
+        }
+        if (barrier2x < -0.05 && !isClearBarrier2) {
+          isClearBarrier2 = true;
+          gameScore += 10;
+
+          if (bestScore < gameScore) {
+            bestScore = gameScore;
+          }
+        }
+
+        // バリアを再配置
+        if (barrier1x < -1.2) {
+          barrier1x = barrierResetPos;
+          isClearBarrier1 = false;
+        } else {
+          barrier1x = barrier1x - barrierMoveSpeed;
+        }
+        if (barrier2x < -1.2) {
+          barrier2x = barrierResetPos;
+          isClearBarrier2 = false;
+        } else {
+          barrier2x = barrier2x - barrierMoveSpeed;
+        }
       });
 
+      // バリア接触でもゲームオーバー
+      if (-0.05 < barrier1x && barrier1x < 0.05) {
+        if (_checkEnterBarrier1(expandedHeight)) {
+          timer.cancel();
+          gameHasStarted = false;
+          resetGame();
+          _showDialog(context);
+        }
+      }
+      if (-0.05 < barrier2x && barrier2x < 0.05) {
+        if (_checkEnterBarrier2(expandedHeight)) {
+          timer.cancel();
+          gameHasStarted = false;
+          resetGame();
+          _showDialog(context);
+        }
+      }
+
+      // 落下判定
       if (birdYAxis > 2) {
         timer.cancel();
         gameHasStarted = false;
@@ -62,8 +137,27 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
+  // バリア接触判定
+  bool _checkEnterBarrier1(double expandedHeight) {
+    final double playerHeight = expandedHeight * (1 - birdYAxis) / 2;
+    final double barrier1UpperPos = expandedHeight - barrier1UpperLength;
+    final double barrier1LowerPos = barrier1LowerLength;
+
+    return playerHeight > barrier1UpperPos || playerHeight < barrier1LowerPos;
+  }
+
+  bool _checkEnterBarrier2(double expandedHeight) {
+    final double playerHeight = expandedHeight * (1 - birdYAxis) / 2;
+    final double barrier2UpperPos = expandedHeight - barrier2UpperLength;
+    final double barrier2LowerPos = barrier2LowerLength;
+
+    return playerHeight > barrier2UpperPos || playerHeight < barrier2LowerPos;
+  }
+
+  // モーダル
   void _showDialog(BuildContext context) {
-    showDialog<void>(
+    showDialog(
+      barrierDismissible: false,
       context: context,
       builder: (BuildContext context) {
         return Dialog(
@@ -76,10 +170,14 @@ class _HomePageState extends State<HomePage> {
                 Text('SCORE',
                     style: TextStyle(color: Colors.black, fontSize: 15)),
                 SizedBox(height: 20),
-                Text("10", style: TextStyle(color: Colors.black, fontSize: 35)),
+                Text(gameScore.toString(),
+                    style: TextStyle(color: Colors.black, fontSize: 35)),
                 SizedBox(height: 20),
                 ElevatedButton(
                   onPressed: () {
+                    setState(() {
+                      gameScore = 0;
+                    });
                     Navigator.pop(context);
                   },
                   child: Text('RESTART'),
@@ -111,6 +209,7 @@ class _HomePageState extends State<HomePage> {
         },
         child: Column(children: [
           Expanded(
+              key: _expandedKey,
               flex: 2,
               child: Stack(children: [
                 AnimatedContainer(
@@ -128,28 +227,28 @@ class _HomePageState extends State<HomePage> {
                             style: TextStyle(color: Colors.white, fontSize: 20),
                           )),
                 AnimatedContainer(
-                    alignment: Alignment(barrier1x, 1.1),
-                    duration: Duration(milliseconds: 0),
-                    child: Barrier(
-                      length: 100,
-                    )),
-                AnimatedContainer(
                     alignment: Alignment(barrier1x, -1.1),
                     duration: Duration(milliseconds: 0),
                     child: Barrier(
-                      length: 150,
+                      length: barrier1UpperLength,
                     )),
                 AnimatedContainer(
-                    alignment: Alignment(barrier2x, 1.1),
+                    alignment: Alignment(barrier1x, 1.1),
                     duration: Duration(milliseconds: 0),
                     child: Barrier(
-                      length: 150,
+                      length: barrier1LowerLength,
                     )),
                 AnimatedContainer(
                     alignment: Alignment(barrier2x, -1.1),
                     duration: Duration(milliseconds: 0),
                     child: Barrier(
-                      length: 100,
+                      length: barrier2UpperLength,
+                    )),
+                AnimatedContainer(
+                    alignment: Alignment(barrier2x, 1.1),
+                    duration: Duration(milliseconds: 0),
+                    child: Barrier(
+                      length: barrier2LowerLength,
                     ))
               ])),
           Container(
@@ -170,7 +269,7 @@ class _HomePageState extends State<HomePage> {
                         style: TextStyle(color: Colors.white, fontSize: 20),
                       ),
                       Text(
-                        "0",
+                        gameScore.toString(),
                         style: TextStyle(color: Colors.white, fontSize: 35),
                       )
                     ],
@@ -182,7 +281,7 @@ class _HomePageState extends State<HomePage> {
                         "BEST",
                         style: TextStyle(color: Colors.white, fontSize: 20),
                       ),
-                      Text("10",
+                      Text(bestScore.toString(),
                           style: TextStyle(color: Colors.white, fontSize: 35))
                     ],
                   )
