@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:flappy_bird/barrier.dart';
 import 'package:flappy_bird/player.dart';
@@ -12,18 +13,19 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
+  static const double barrierResetPos = 1.5;
+  static const double barrierMoveSpeed = 0.05;
+
   bool gameHasStarted = false;
   double birdYAxis = 0;
   double initialHeight = 0;
   double height = 0;
   double time = 0;
-  double barrierResetPos = 1.5;
-  double barrierMoveSpeed = 0.05;
   static double barrier1x = 1.5;
   double barrier2x = barrier1x + 1.5;
   Timer? gameTimer;
   final GlobalKey _expandedKey = GlobalKey();
-  double expandedHeight = 0.0;
+  double expandedHeight = 0;
   double barrier1UpperLength = 100;
   double barrier1LowerLength = 150;
   double barrier2UpperLength = 150;
@@ -45,7 +47,6 @@ class _HomePageState extends State<HomePage> {
     setState(() {
       expandedHeight = renderBox.size.height;
     });
-    print("Expanded height: $expandedHeight");
   }
 
   void jump() {
@@ -63,78 +64,63 @@ class _HomePageState extends State<HomePage> {
     isClearBarrier2 = false;
   }
 
-  void startGame(BuildContext context) {
-    gameHasStarted = true;
-    gameTimer?.cancel();
+  void updateScore() {
+    if (barrier1x < -0.05 && !isClearBarrier1) {
+      isClearBarrier1 = true;
+      gameScore += 10;
+      updateBestScore();
+    }
+    if (barrier2x < -0.05 && !isClearBarrier2) {
+      isClearBarrier2 = true;
+      gameScore += 10;
+      updateBestScore();
+    }
+  }
 
-    gameTimer = Timer.periodic(const Duration(milliseconds: 50), (timer) {
-      time += 0.05;
-      height = -4 * time * time + 2 * time;
+  void updateBestScore() {
+    if (bestScore < gameScore) {
+      bestScore = gameScore;
+    }
+  }
 
-      setState(() {
-        birdYAxis = initialHeight - height;
+  void randomizeBarrier1Length() {
+    barrier1UpperLength =
+        Random().nextInt(57) * expandedHeight / 100 + expandedHeight * 0.1;
+    barrier1LowerLength =
+        expandedHeight - expandedHeight * 0.33 - barrier1UpperLength;
+  }
 
-        // バリアを超えたらスコア追加
-        print("barrier1x$barrier1x");
-        if (barrier1x < -0.05 && !isClearBarrier1) {
-          print("barrier1超えた");
-          isClearBarrier1 = true;
-          gameScore += 10;
+  void randomizeBarrier2Length() {
+    barrier2UpperLength =
+        Random().nextInt(57) * expandedHeight / 100 + expandedHeight * 0.1;
+    barrier2LowerLength =
+        expandedHeight - expandedHeight * 0.33 - barrier2UpperLength;
+  }
 
-          if (bestScore < gameScore) {
-            bestScore = gameScore;
-          }
-        }
-        if (barrier2x < -0.05 && !isClearBarrier2) {
-          isClearBarrier2 = true;
-          gameScore += 10;
+  void relocationBarriers() {
+    if (barrier1x < -1.2) {
+      barrier1x = barrierResetPos;
+      randomizeBarrier1Length();
+      isClearBarrier1 = false;
+    } else {
+      barrier1x -= barrierMoveSpeed;
+    }
+    if (barrier2x < -1.2) {
+      barrier2x = barrierResetPos;
+      randomizeBarrier2Length();
+      isClearBarrier2 = false;
+    } else {
+      barrier2x -= barrierMoveSpeed;
+    }
+  }
 
-          if (bestScore < gameScore) {
-            bestScore = gameScore;
-          }
-        }
-
-        // バリアを再配置
-        if (barrier1x < -1.2) {
-          barrier1x = barrierResetPos;
-          isClearBarrier1 = false;
-        } else {
-          barrier1x = barrier1x - barrierMoveSpeed;
-        }
-        if (barrier2x < -1.2) {
-          barrier2x = barrierResetPos;
-          isClearBarrier2 = false;
-        } else {
-          barrier2x = barrier2x - barrierMoveSpeed;
-        }
-      });
-
-      // バリア接触でもゲームオーバー
-      if (-0.05 < barrier1x && barrier1x < 0.05) {
-        if (_checkEnterBarrier1(expandedHeight)) {
-          timer.cancel();
-          gameHasStarted = false;
-          resetGame();
-          _showDialog(context);
-        }
-      }
-      if (-0.05 < barrier2x && barrier2x < 0.05) {
-        if (_checkEnterBarrier2(expandedHeight)) {
-          timer.cancel();
-          gameHasStarted = false;
-          resetGame();
-          _showDialog(context);
-        }
-      }
-
-      // 落下判定
-      if (birdYAxis > 2) {
-        timer.cancel();
-        gameHasStarted = false;
-        resetGame();
-        _showDialog(context);
-      }
-    });
+  bool checkCollisionBarrier(barrier1x, barrier2x, expandedHeight) {
+    return (-0.05 < barrier1x &&
+            barrier1x < 0.05 &&
+            _checkEnterBarrier1(expandedHeight)) ||
+        -0.05 < barrier2x &&
+            barrier2x < 0.05 &&
+            _checkEnterBarrier2(expandedHeight);
   }
 
   // バリア接触判定
@@ -154,6 +140,33 @@ class _HomePageState extends State<HomePage> {
     return playerHeight > barrier2UpperPos || playerHeight < barrier2LowerPos;
   }
 
+  void startGame(BuildContext context) {
+    gameHasStarted = true;
+    gameTimer?.cancel();
+
+    gameTimer = Timer.periodic(const Duration(milliseconds: 50), (timer) {
+      time += 0.05;
+      height = -4 * time * time + 2 * time;
+
+      setState(() {
+        birdYAxis = initialHeight - height;
+        // バリアを超えたらスコア追加
+        updateScore();
+        // バリアを再配置
+        relocationBarriers();
+      });
+
+      // バリア接触、落下でゲームオーバー
+      if (checkCollisionBarrier(barrier1x, barrier2x, expandedHeight) ||
+          birdYAxis > 2) {
+        timer.cancel();
+        gameHasStarted = false;
+        resetGame();
+        _showDialog(context);
+      }
+    });
+  }
+
   // モーダル
   void _showDialog(BuildContext context) {
     showDialog(
@@ -167,12 +180,12 @@ class _HomePageState extends State<HomePage> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text('SCORE',
+                const Text('SCORE',
                     style: TextStyle(color: Colors.black, fontSize: 15)),
-                SizedBox(height: 20),
+                const SizedBox(height: 20),
                 Text(gameScore.toString(),
-                    style: TextStyle(color: Colors.black, fontSize: 35)),
-                SizedBox(height: 20),
+                    style: const TextStyle(color: Colors.black, fontSize: 35)),
+                const SizedBox(height: 20),
                 ElevatedButton(
                   onPressed: () {
                     setState(() {
@@ -180,7 +193,7 @@ class _HomePageState extends State<HomePage> {
                     });
                     Navigator.pop(context);
                   },
-                  child: Text('RESTART'),
+                  child: const Text('RESTART'),
                 ),
               ],
             ),
@@ -228,25 +241,25 @@ class _HomePageState extends State<HomePage> {
                           )),
                 AnimatedContainer(
                     alignment: Alignment(barrier1x, -1.1),
-                    duration: Duration(milliseconds: 0),
+                    duration: const Duration(milliseconds: 0),
                     child: Barrier(
                       length: barrier1UpperLength,
                     )),
                 AnimatedContainer(
                     alignment: Alignment(barrier1x, 1.1),
-                    duration: Duration(milliseconds: 0),
+                    duration: const Duration(milliseconds: 0),
                     child: Barrier(
                       length: barrier1LowerLength,
                     )),
                 AnimatedContainer(
                     alignment: Alignment(barrier2x, -1.1),
-                    duration: Duration(milliseconds: 0),
+                    duration: const Duration(milliseconds: 0),
                     child: Barrier(
                       length: barrier2UpperLength,
                     )),
                 AnimatedContainer(
                     alignment: Alignment(barrier2x, 1.1),
-                    duration: Duration(milliseconds: 0),
+                    duration: const Duration(milliseconds: 0),
                     child: Barrier(
                       length: barrier2LowerLength,
                     ))
@@ -264,25 +277,27 @@ class _HomePageState extends State<HomePage> {
                   Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Text(
+                      const Text(
                         "SCORE",
                         style: TextStyle(color: Colors.white, fontSize: 20),
                       ),
                       Text(
                         gameScore.toString(),
-                        style: TextStyle(color: Colors.white, fontSize: 35),
+                        style:
+                            const TextStyle(color: Colors.white, fontSize: 35),
                       )
                     ],
                   ),
                   Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Text(
+                      const Text(
                         "BEST",
                         style: TextStyle(color: Colors.white, fontSize: 20),
                       ),
                       Text(bestScore.toString(),
-                          style: TextStyle(color: Colors.white, fontSize: 35))
+                          style: const TextStyle(
+                              color: Colors.white, fontSize: 35))
                     ],
                   )
                 ],
